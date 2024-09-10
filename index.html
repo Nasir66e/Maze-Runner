@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Runner with Prim's and A* Algorithm</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        #maze-container {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            grid-template-rows: repeat(10, 1fr);
+            width: 500px;
+            height: 500px;
+            border: none;
+            border-radius: 4px;
+        }
+
+        .cell {
+            border-top: 1px solid #000;
+            border-right: 1px solid #000;
+            border-bottom: 1px solid #000;
+            border-left: 1px solid #000;
+            box-sizing: border-box;
+        }
+
+        .cell:first-of-type {
+            border-top: none;
+        }
+
+        .cell:last-of-type {
+            border-bottom: none;
+        }
+
+        .current {
+            background-color: #666;
+        }
+
+        .visited {
+            background-color: #999;
+        }
+
+        .solved {
+            background-color: #00CC00;
+        }
+
+        p {
+            font-size: 16px;
+            color: darkslategrey;
+            font-family: monospace;
+        }
+
+        span {
+            color: green;
+        }
+
+    </style>
+</head>
+
+<body>
+
+    <div id="maze-container"></div>
+    <p>Press <span>S</span> to solve automatically</p>
+    <script>
+        const container = document.getElementById('maze-container');
+        const gridSize = 10;
+        let cells = [];
+        let matrix = [];
+        let walls = [1, 1, 1, 1]; // top, right, bottom, left
+        let path = [];
+        let solvePath = [];
+        let solving = false;
+
+        container.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
+        container.style.gridTemplateRows = `repeat(${gridSize}, 1fr)`;
+
+        // Create the grid and cells
+        for (let i = 0; i < gridSize * gridSize; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            container.appendChild(cell);
+            cells.push(cell);
+            matrix.push([...walls]);
+        }
+
+        // Prim's Algorithm for Maze Generation
+        function mazeGeneration() {
+            const start = 0;
+            const walls = [];
+            const visited = Array(gridSize * gridSize).fill(false);
+            visited[start] = true;
+
+            // Add walls of the starting cell to the wall list
+            addWalls(start, walls, visited);
+
+            while (walls.length > 0) {
+                const randomWallIndex = Math.floor(Math.random() * walls.length);
+                const {
+                    cell,
+                    neighbor,
+                    direction
+                } = walls[randomWallIndex];
+
+                if (!visited[neighbor]) {
+                    removeWallBetween(cell, neighbor, direction);
+                    visited[neighbor] = true;
+                    addWalls(neighbor, walls, visited);
+                }
+
+                walls.splice(randomWallIndex, 1); // Remove the wall from the list
+            }
+        }
+
+        function addWalls(cell, walls, visited) {
+            const directions = [{
+                    dx: -1,
+                    dy: 0,
+                    index: 0,
+                    opposite: 2
+                }, // top
+                {
+                    dx: 1,
+                    dy: 0,
+                    index: 2,
+                    opposite: 0
+                }, // bottom
+                {
+                    dx: 0,
+                    dy: -1,
+                    index: 3,
+                    opposite: 1
+                }, // left
+                {
+                    dx: 0,
+                    dy: 1,
+                    index: 1,
+                    opposite: 3
+                } // right
+            ];
+
+            const row = Math.floor(cell / gridSize);
+            const col = cell % gridSize;
+
+            directions.forEach(({
+                dx,
+                dy,
+                index,
+                opposite
+            }) => {
+                const newRow = row + dx;
+                const newCol = col + dy;
+                const neighbor = newRow * gridSize + newCol;
+
+                if (newRow >= 0 && newRow < gridSize && newCol >= 0 && newCol < gridSize && !visited[neighbor]) {
+                    walls.push({
+                        cell,
+                        neighbor,
+                        direction: index
+                    });
+                }
+            });
+        }
+
+        function removeWallBetween(cell, neighbor, direction) {
+            matrix[cell][direction] = 0;
+            matrix[neighbor][(direction + 2) % 4] = 0;
+
+            switch (direction) {
+                case 0: // top
+                    cells[cell].style.borderTop = 'none';
+                    cells[neighbor].style.borderBottom = 'none';
+                    break;
+                case 1: // right
+                    cells[cell].style.borderRight = 'none';
+                    cells[neighbor].style.borderLeft = 'none';
+                    break;
+                case 2: // bottom
+                    cells[cell].style.borderBottom = 'none';
+                    cells[neighbor].style.borderTop = 'none';
+                    break;
+                case 3: // left
+                    cells[cell].style.borderLeft = 'none';
+                    cells[neighbor].style.borderRight = 'none';
+                    break;
+            }
+            adjustBorderWidth();
+        }
+
+        function adjustBorderWidth() {
+            for (let i = 0; i < gridSize * gridSize; i++) {
+                let cell = cells[i];
+
+                // Apply special border widths based on the cell's position
+                let row = Math.floor(i / gridSize);
+                let col = i % gridSize;
+
+                if (row === 0) {
+                    cell.style.borderTopWidth = '2px';
+                }
+                if (col === 0) {
+                    cell.style.borderLeftWidth = '2px';
+                }
+                if (row === gridSize - 1) {
+                    cell.style.borderBottomWidth = '2px';
+                }
+                if (col === gridSize - 1) {
+                    cell.style.borderRightWidth = '2px';
+                }
+            }
+
+        }
+
+        // A* Algorithm for Maze Solving
+        function heuristic(a, b) {
+            const ax = a % gridSize,
+                ay = Math.floor(a / gridSize);
+            const bx = b % gridSize,
+                by = Math.floor(b / gridSize);
+            return Math.abs(ax - bx) + Math.abs(ay - by);
+        }
+
+        function findPath(start, goal) {
+            const openSet = [start];
+            const cameFrom = {};
+            const gScore = Array(gridSize * gridSize).fill(Infinity);
+            const fScore = Array(gridSize * gridSize).fill(Infinity);
+
+            gScore[start] = 0;
+            fScore[start] = heuristic(start, goal);
+
+            while (openSet.length > 0) {
+                let current = openSet.reduce((acc, node) => (fScore[node] < fScore[acc] ? node : acc), openSet[0]);
+
+                if (current === goal) {
+                    reconstructPath(cameFrom, current);
+                    return true;
+                }
+
+                openSet.splice(openSet.indexOf(current), 1);
+
+                getOpenNeighbors(current).forEach(neighbor => {
+                    const tentativeGScore = gScore[current] + 1;
+
+                    if (tentativeGScore < gScore[neighbor]) {
+                        cameFrom[neighbor] = current;
+                        gScore[neighbor] = tentativeGScore;
+                        fScore[neighbor] = gScore[neighbor] + heuristic(neighbor, goal);
+
+                        if (!openSet.includes(neighbor)) {
+                            openSet.push(neighbor);
+                        }
+                    }
+                });
+            }
+            return false; // No solution found
+        }
+
+        function reconstructPath(cameFrom, current) {
+            solvePath = [current];
+            while (current in cameFrom) {
+                current = cameFrom[current];
+                solvePath.unshift(current);
+            }
+        }
+
+        function getOpenNeighbors(index) {
+            const neighbors = [];
+            const row = Math.floor(index / gridSize);
+            const col = index % gridSize;
+
+            if (matrix[index][0] === 0 && row > 0) neighbors.push(index - gridSize); // up
+            if (matrix[index][1] === 0 && col < gridSize - 1) neighbors.push(index + 1); // right
+            if (matrix[index][2] === 0 && row < gridSize - 1) neighbors.push(index + gridSize); // down
+            if (matrix[index][3] === 0 && col > 0) neighbors.push(index - 1); // left
+
+            return neighbors;
+        }
+
+        function animateSolution() {
+            if (solvePath.length > 0) {
+                const current = solvePath.shift();
+                cells[current].classList.add('solved');
+                setTimeout(animateSolution, 100);
+            }
+        }
+
+        function solveMaze() {
+            if (solving) return;
+            solving = true;
+
+            const start = 0;
+            const goal = gridSize * gridSize - 1;
+            cells[start].classList.add('solved');
+
+            if (findPath(start, goal)) {
+                animateSolution();
+            } else {
+                alert("No solution found!");
+            }
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 's' || e.key === 'S') {
+                solveMaze();
+            }
+        });
+
+        // Generate and solve the maze
+        mazeGeneration();
+
+        //_____________ Solve Manually ______________
+
+        // Maze Navigation
+        let currentIndex = 0;
+        cells[currentIndex].classList.add('current');
+
+        // Function to move to a new index
+        function moveTo(newIndex) {
+            cells[currentIndex].classList.remove('current');
+            cells[currentIndex].classList.add('visited');
+            currentIndex = newIndex;
+            if (cells[currentIndex].classList.contains('visited')) {
+                cells[currentIndex].classList.remove('visited');
+                cells[currentIndex].classList.add('current');
+            } else {
+                cells[currentIndex].classList.add('current');
+            }
+            path.push(currentIndex); // Add new index to the path
+        }
+
+        // Function to handle arrow key movements
+        function handleArrowKey(e) {
+            let newIndex = currentIndex;
+            switch (e.key) {
+                case 'ArrowUp':
+                    if (matrix[currentIndex][0] === 0) {
+                        newIndex -= gridSize;
+                        moveTo(newIndex);
+                    }
+                    break;
+                case 'ArrowRight':
+                    if (matrix[currentIndex][1] === 0) {
+                        newIndex += 1;
+                        moveTo(newIndex);
+                    }
+                    break;
+                case 'ArrowDown':
+                    if (matrix[currentIndex][2] === 0) {
+                        newIndex += gridSize;
+                        moveTo(newIndex);
+                    }
+                    break;
+                case 'ArrowLeft':
+                    if (matrix[currentIndex][3] === 0) {
+                        newIndex -= 1;
+                        moveTo(newIndex);
+                    }
+                    break;
+            }
+
+            // Check if the user has reached the goal
+            if (currentIndex === gridSize * gridSize - 1) {
+                cells[cells.length - 1].style.backgroundColor = '#00CC00';
+                setTimeout(() => {
+                    alert("Congratulations! You've solved the maze.");
+                }, 200);
+            }
+        }
+
+        // Handle arrow key presses for movement
+        document.addEventListener('keydown', function(e) {
+            if (e.key.startsWith('Arrow')) {
+                handleArrowKey(e);
+            }
+        });
+
+    </script>
+</body>
+
+</html>
